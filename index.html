@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>節拍器 (Metronome) - Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 設定 Inter 字體，以及應用程式的背景 */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a2e; /* 深色背景 */
+            color: #ffffff;
+            display: flex;
+            flex-direction: column; /* 修改為 column 以容納歌單 */
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            /* 禁用文字反白選取功能 */
+            -webkit-user-select: none; 
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        /* 自訂按鈕樣式 */
+        .metronome-button {
+            transition: all 0.15s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+            border: 2px solid transparent;
+        }
+
+        .metronome-button:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .metronome-button:active {
+            opacity: 0.7;
+            transform: translateY(1px);
+        }
+
+        /* 節拍器卡片 */
+        .metronome-card {
+            background-color: #2c2a4a;
+            border: 1px solid #4a4768;
+            transition: transform 0.2s;
+            max-width: 420px;
+            width: 100%;
+        }
+
+        /* 歌單卡片 */
+        .preset-card {
+            background-color: #232138;
+            border: 1px solid #4a4768;
+            max-width: 420px;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        /* 當前節拍視覺指示燈 */
+        .beat-indicator {
+            transition: background-color 0.1s;
+        }
+
+        /* 隱藏預設的 input number 箭頭 */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+            user-select: auto;
+        }
+        /* 一般文字輸入框允許選取 */
+        input[type="text"] {
+            user-select: auto;
+        }
+
+        /* 視覺化象限的基底樣式 */
+        .beat-quadrant {
+            background-color: #2c2a4a;
+            border: 1px solid #4a4768;
+            transition: all 0.15s ease;
+        }
+        
+        /* 視覺化數字的基底樣式 */
+        .visualization-text-container {
+            transition: all 0.075s ease-out; 
+            will-change: transform, color;
+        }
+
+        /* 捲軸樣式優化 */
+        .preset-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        .preset-list::-webkit-scrollbar-track {
+            background: #1a1a2e; 
+        }
+        .preset-list::-webkit-scrollbar-thumb {
+            background: #4a4768; 
+            border-radius: 4px;
+        }
+        .preset-list::-webkit-scrollbar-thumb:hover {
+            background: #6a5acd; 
+        }
+    </style>
+</head>
+<body>
+
+<div id="app" class="metronome-card p-6 md:p-8 rounded-xl shadow-2xl text-center z-10">
+    <h1 class="text-3xl font-extrabold mb-6 text-[#9a7dff]">
+        🎵 數位節拍器
+    </h1>
+
+    <div class="mb-6">
+        <span id="bpmDisplay" class="text-7xl font-mono font-bold text-white transition-colors duration-200">
+            120
+        </span>
+        <div class="text-lg text-gray-400 mt-1">
+            BPM
+        </div>
+    </div>
+
+    <div class="flex items-center justify-center space-x-2 mb-8">
+        <button onclick="changeBPM(-1)" class="metronome-button bg-[#6a5acd] hover:bg-[#5a4ba5] p-3 rounded-full w-10 h-10 flex items-center justify-center text-xl font-bold">
+            −
+        </button>
+        
+        <div class="flex flex-col items-center">
+            <label class="text-xs text-gray-400 mb-1">BPM</label>
+            <input type="number" id="bpmInput" value="120" min="40" max="240"
+                onchange="updateBPM(this.value)"
+                class="w-20 text-center text-2xl font-bold bg-[#4a4768] p-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9a7dff] border border-[#6a5acd]">
+        </div>
+
+        <button onclick="changeBPM(1)" class="metronome-button bg-[#6a5acd] hover:bg-[#5a4ba5] p-3 rounded-full w-10 h-10 flex items-center justify-center text-xl font-bold">
+            ＋
+        </button>
+
+        <div class="w-px h-10 bg-gray-600 mx-2"></div>
+
+        <div class="flex flex-col items-center">
+            <label class="text-xs text-gray-400 mb-1">拍數</label>
+            <div class="flex items-center">
+                <button onclick="changeBeats(-1)" class="metronome-button bg-gray-600 hover:bg-gray-500 w-8 h-8 rounded-l-lg flex items-center justify-center font-bold">-</button>
+                <input type="number" id="beatsInput" value="4" min="1" max="8" readonly
+                    class="w-12 text-center text-xl font-bold bg-[#232138] h-8 focus:outline-none border-y border-[#4a4768]">
+                <button onclick="changeBeats(1)" class="metronome-button bg-gray-600 hover:bg-gray-500 w-8 h-8 rounded-r-lg flex items-center justify-center font-bold">+</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex space-x-2 md:space-x-4 mb-6">
+        <button id="fullscreenLockToggle" onclick="toggleFullscreenLock()"
+                title="鎖定自動全螢幕 (F)"
+                class="metronome-button w-1/5 py-4 rounded-xl bg-[#4a4768] hover:bg-[#5a577d] focus:outline-none focus:ring-4 focus:ring-[#9a7dff] flex items-center justify-center">
+            <div id="fullscreenIconContainer" class="text-gray-400 w-7 h-7 flex items-center justify-center"></div>
+        </button>
+
+        <button id="startButton" onclick="startStop()"
+                class="metronome-button w-3/5 py-4 text-xl font-bold rounded-xl bg-green-500 hover:bg-green-600 focus:outline-none focus:ring-4 focus:ring-green-700">
+            開始
+        </button>
+        
+        <button id="drumModeToggle" onclick="toggleDrumMode()"
+                title="切換至鼓模式 (D)"
+                class="metronome-button w-1/5 py-4 rounded-xl bg-[#4a4768] hover:bg-[#5a577d] focus:outline-none focus:ring-4 focus:ring-[#9a7dff] flex items-center justify-center">
+            <svg id="drumIcon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 transition-colors duration-150">
+                <path d="m2 2 8 8"/>
+                <path d="m22 2-8 8"/>
+                <ellipse cx="12" cy="9" rx="10" ry="5"/>
+                <path d="M7 13.4v7.9"/>
+                <path d="M12 14v8"/>
+                <path d="M17 13.4v7.9"/>
+                <path d="M2 9v8a10 5 0 0 0 20 0V9"/>
+            </svg>
+        </button>
+    </div>
+
+    <div id="tapTempoArea" 
+         onclick="handleTap()"
+         class="p-3 bg-[#4a4768] rounded-xl cursor-pointer hover:bg-[#5a577d] transition-colors mb-6 border border-dashed border-[#6a5acd] active:scale-[0.99]">
+        <p class="text-base font-semibold text-gray-200 uppercase tracking-wider">
+            TAP TEMPO
+        </p>
+        <p id="tapTempoInfo" class="text-xs text-gray-400 mt-1 h-3">
+            點擊此處或按 [空白鍵] 來偵測節拍
+        </p>
+    </div>
+    
+    <div id="beatIndicators" class="flex justify-center space-x-3 mt-6 flex-wrap gap-y-2">
+        </div>
+</div>
+
+<div class="preset-card rounded-xl shadow-lg p-6 mt-6 z-10">
+    <h2 class="text-xl font-bold text-[#9a7dff] mb-4 flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></svg>
+        我的歌單 (Presets)
+    </h2>
+    
+    <div class="flex space-x-2 mb-4">
+        <input type="text" id="presetNameInput" placeholder="輸入歌曲名稱..." 
+               class="flex-1 bg-[#1a1a2e] text-white px-3 py-2 rounded-lg border border-[#4a4768] focus:outline-none focus:border-[#9a7dff] text-sm">
+        <button onclick="savePreset()" 
+                class="bg-[#6a5acd] hover:bg-[#5a4ba5] text-white px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center">
+            <span>儲存</span>
+        </button>
+    </div>
+
+    <div class="preset-list overflow-y-auto max-h-60 pr-1">
+        <ul id="presetListUl" class="space-y-2">
+            <li class="text-gray-500 text-center text-sm py-4">尚無儲存的設定</li>
+        </ul>
+    </div>
+</div>
+
+<div id="visualizationScreen" 
+     class="hidden fixed inset-0 z-50 p-4 sm:p-8 bg-gray-900/95 cursor-pointer grid grid-cols-2 grid-rows-2 gap-4 sm:gap-8"
+     title="點擊任意處退出視覺化模式">
+    
+    <div data-beat="1" id="visual_1" class="beat-quadrant flex items-center justify-center rounded-xl">
+        <div class="visualization-text-container text-[150px] sm:text-[250px] font-extrabold">
+            <span class="beat-number-main text-gray-700">1</span>
+        </div>
+    </div>
+    <div data-beat="2" id="visual_2" class="beat-quadrant flex items-center justify-center rounded-xl">
+        <div class="visualization-text-container text-[150px] sm:text-[250px] font-extrabold">
+            <span class="beat-number-main text-gray-700">2</span>
+        </div>
+    </div>
+    <div data-beat="4" id="visual_4" class="beat-quadrant flex items-center justify-center rounded-xl">
+        <div class="visualization-text-container text-[150px] sm:text-[250px] font-extrabold">
+            <span class="beat-number-main text-gray-700">4</span>
+        </div>
+    </div>
+    <div data-beat="3" id="visual_3" class="beat-quadrant flex items-center justify-center rounded-xl">
+        <div class="visualization-text-container text-[150px] sm:text-[250px] font-extrabold">
+            <span class="beat-number-main text-gray-700">3</span>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    // Web Audio API
+    let audioContext;
+    let isPlaying = false;
+    let lookahead = 25.0; 
+    let scheduleAheadTime = 0.1; 
+    let nextNoteTime = 0.0; 
+
+    // 狀態變數
+    let bpm = 120;
+    let beatsPerMeasure = 4; // 可變動的拍數
+    let currentBeat = 0; 
+    let isDrumMode = false; 
+    let isVisualizationMode = false; 
+    let isFullscreenDisabled = false; 
+    
+    // 細分模式陣列 (長度隨 beatsPerMeasure 改變)
+    let beatSubdivisions = new Array(beatsPerMeasure).fill(0); 
+
+    const SUBDIVISION_LABELS = {
+        0: `<span class="text-lg font-extrabold relative top-[-1px]">1</span>`, 
+        1: `<span class="text-lg font-extrabold relative top-[-1px]">2</span>`, 
+        2: `<span class="text-lg font-extrabold relative top-[-1px]">4</span>`, 
+        3: `<span class="text-lg font-extrabold relative top-[-1px]">3</span>`, 
+        4: `<span class="text-xl font-extrabold text-red-500">M</span>`, 
+    };
+    
+    // 音頻常數
+    const DRUM_KICK_FREQ = 80.0;     
+    const DRUM_SNARE_FREQ = 200.0;   
+    const DRUM_SNARE_DURATION = 0.1; 
+    const METRONOME_STRONG_FREQ = 600.0;
+    const METRONROME_WEAK_FREQ = 400.0;
+    const METRONOME_DURATION = 0.05; 
+    const METRONOME_SUB_FREQ = 350.0; 
+    const SUBDIVISION_VOLUME_MULTIPLIER = 0.8; 
+
+    // SVG
+    const SVG_EYE_CLOSED = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full"><path d="m15 18-.722-3.25"/><path d="M2 8a10.645 10.645 0 0 0 20 0"/><path d="m20 15-1.726-2.05"/><path d="m4 15 1.726-2.05"/><path d="m9 18 .722-3.25"/></svg>`;
+    const SVG_EYE_OPEN = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-full h-full"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>`;
+    const SVG_TRASH = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`;
+
+    // DOM
+    const appContainer = document.getElementById('app');
+    const visualizationScreen = document.getElementById('visualizationScreen');
+    const startButton = document.getElementById('startButton');
+    const bpmInput = document.getElementById('bpmInput');
+    const bpmDisplay = document.getElementById('bpmDisplay');
+    const beatsInput = document.getElementById('beatsInput'); // 新增
+    const beatIndicatorsContainer = document.getElementById('beatIndicators'); // 改為容器
+    const tapTempoInfo = document.getElementById('tapTempoInfo');
+    const drumModeToggle = document.getElementById('drumModeToggle');
+    const drumIcon = document.getElementById('drumIcon');
+    const fullscreenLockToggle = document.getElementById('fullscreenLockToggle'); 
+    const fullscreenIconContainer = document.getElementById('fullscreenIconContainer');
+    const presetNameInput = document.getElementById('presetNameInput'); // 新增
+    const presetListUl = document.getElementById('presetListUl'); // 新增
+    
+    let intervalTimer = null;
+    let autoFullscreenTimeout = null;
+    const AUTO_FULLSCREEN_DELAY = 3000;
+    
+    // Tap Tempo
+    let tapHistory = [];
+    const TAP_RESET_THRESHOLD = 2000; 
+
+    // ---------------------------------------------------------
+    // --- 核心功能函數 ---
+    // ---------------------------------------------------------
+
+    function initializeAudio() {
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+
+    function playClick(time, pitch, duration, volume = 1.0) {
+        if (!audioContext) return;
+        const oscillator = audioContext.createOscillator();
+        oscillator.type = 'sine'; 
+        oscillator.frequency.setValueAtTime(pitch, time); 
+        const gainNode = audioContext.createGain();
+        gainNode.gain.setValueAtTime(volume, time); 
+        gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        oscillator.start(time);
+        oscillator.stop(time + duration);
+    }
+
+    function scheduler() {
+        while (nextNoteTime < audioContext.currentTime + scheduleAheadTime) {
+            const secondsPerBeat = 60.0 / bpm;
+            currentBeat = (currentBeat % beatsPerMeasure) + 1;
+            const beatIndex = currentBeat - 1; 
+            const subdivisionMode = beatSubdivisions[beatIndex]; 
+
+            let subdivisionCount = 1; 
+            if (subdivisionMode === 1) subdivisionCount = 2;
+            else if (subdivisionMode === 2) subdivisionCount = 4;
+            else if (subdivisionMode === 3) subdivisionCount = 3;
+            else if (subdivisionMode === 4) subdivisionCount = 0;
+
+            if (subdivisionCount > 0) {
+                const subDuration = secondsPerBeat / subdivisionCount;
+                for (let i = 0; i < subdivisionCount; i++) {
+                    const clickTime = nextNoteTime + i * subDuration;
+                    const subStep = i;
+                    updateVisuals(currentBeat, subStep, subdivisionMode);
+                    
+                    let pitch, duration, volumeMultiplier; 
+                    const isMainBeatClick = (i === 0);
+                    volumeMultiplier = isMainBeatClick ? 1.0 : SUBDIVISION_VOLUME_MULTIPLIER;
+
+                    if (isDrumMode) {
+                        if (isMainBeatClick) {
+                            // 動態判斷重音：第一拍為 Kick，其他為 Snare
+                            pitch = (currentBeat === 1) ? DRUM_KICK_FREQ : DRUM_SNARE_FREQ;
+                            duration = (currentBeat !== 1) ? DRUM_SNARE_DURATION : METRONOME_DURATION;
+                        } else {
+                            pitch = 800.0; 
+                            duration = METRONOME_DURATION * 0.3;
+                        }
+                    } else {
+                        duration = METRONOME_DURATION; 
+                        if (currentBeat === 1 && isMainBeatClick) pitch = METRONOME_STRONG_FREQ;
+                        else if (isMainBeatClick) pitch = METRONROME_WEAK_FREQ;
+                        else pitch = METRONOME_SUB_FREQ;
+                    }
+                    playClick(clickTime, pitch, duration, volumeMultiplier);
+                }
+            } else {
+                updateVisuals(currentBeat, -1, subdivisionMode); 
+            }
+            nextNoteTime += secondsPerBeat;
+        }
+    }
+
+    function updateVisuals(beat, subdivisionStep, subdivisionMode) {
+        const delay = (nextNoteTime - audioContext.currentTime) * 1000;
+        setTimeout(() => {
+            const animationDuration = 75;
+            
+            // 1. 更新小圓點指示燈
+            const indicators = document.querySelectorAll('.beat-indicator');
+            indicators.forEach((indicator, index) => {
+                // 重置狀態
+                indicator.classList.remove('bg-[#ff5733]', 'bg-[#ffc300]', 'opacity-100');
+                if (beatSubdivisions[index] !== 4) { 
+                    indicator.classList.remove('bg-gray-900', 'opacity-50');
+                    indicator.classList.add('bg-gray-600');
+                }
+            });
+
+            const activeIndicator = document.querySelector(`.beat-indicator[data-beat="${beat}"]`);
+            const beatIndex = beat - 1;
+            
+            if (activeIndicator && subdivisionStep === 0) {
+                const colorClass = (beat === 1) ? 'bg-[#ff5733]' : 'bg-[#ffc300]';
+                if (beatSubdivisions[beatIndex] !== 4) { 
+                    activeIndicator.classList.remove('bg-gray-600');
+                    activeIndicator.classList.add(colorClass, 'opacity-100');
+                }
+            }
+            
+            // 2. 更新全螢幕視覺化
+            if (isVisualizationMode) {
+                const isMainFlash = subdivisionStep === 0 || subdivisionStep === -1;
+                
+                if (isMainFlash) {
+                    // 重置所有
+                    document.querySelectorAll('.beat-number-main').forEach(el => {
+                        el.classList.remove('text-white', 'scale-105', 'text-red-400', 'text-[#9a7dff]');
+                        el.classList.add('text-gray-700');
+                    });
+                    document.querySelectorAll('.beat-quadrant').forEach(el => el.classList.remove('bg-[#4a4768]'));
+
+                    // 僅在 beat <= 4 時觸發視覺化 (因為只有 4 個格子)
+                    // 如果超過 4 拍 (例如 5拍)，暫時循環使用 1-4 格，或者忽略
+                    // 這裡做簡單映射：超過 4 的拍子回到 2, 3, 4...
+                    let visualId = beat;
+                    if (visualId > 4) visualId = ((visualId - 1) % 4) + 1;
+
+                    const currentElement = document.getElementById(`visual_${visualId}`);
+                    if (currentElement) {
+                        const numberColor = (beat === 1) ? 'text-red-400' : 'text-[#9a7dff]';
+                        const mainNumber = currentElement.querySelector('.beat-number-main');
+                        
+                        // 更新數字內容 (適應 >4 拍的情況)
+                        if (mainNumber) mainNumber.innerText = beat;
+
+                        currentElement.classList.add('bg-[#4a4768]'); 
+                        if (mainNumber) {
+                            mainNumber.classList.remove('text-gray-700');
+                            mainNumber.classList.add('text-white', numberColor, 'scale-105');
+                            setTimeout(() => mainNumber.classList.remove('scale-105'), animationDuration);
+                        }
+                    }
+                }
+            }
+        }, delay > 0 ? delay : 0);
+    }
+
+    // ---------------------------------------------------------
+    // --- UI 與 互動 ---
+    // ---------------------------------------------------------
+
+    // 動態產生節拍指示燈
+    window.renderBeatIndicators = function() {
+        beatIndicatorsContainer.innerHTML = '';
+        beatSubdivisions = beatSubdivisions.slice(0, beatsPerMeasure);
+        // 補足長度
+        while (beatSubdivisions.length < beatsPerMeasure) {
+            beatSubdivisions.push(0);
+        }
+
+        for (let i = 0; i < beatsPerMeasure; i++) {
+            const beatNum = i + 1;
+            const div = document.createElement('div');
+            div.className = 'beat-indicator w-10 h-10 rounded-full bg-gray-600 relative flex items-center justify-center cursor-pointer hover:ring-2 ring-white/20';
+            div.dataset.beat = beatNum;
+            div.dataset.index = i;
+            div.onclick = () => toggleSubdivision(i);
+            
+            // 靜音狀態處理
+            if (beatSubdivisions[i] === 4) {
+                div.classList.add('bg-gray-900', 'opacity-50');
+                div.classList.remove('bg-gray-600');
+            }
+
+            const span = document.createElement('span');
+            span.className = 'absolute font-bold text-white mode-text pointer-events-none';
+            span.innerHTML = SUBDIVISION_LABELS[beatSubdivisions[i]] || '1';
+            
+            div.appendChild(span);
+            beatIndicatorsContainer.appendChild(div);
+        }
+    }
+
+    window.changeBeats = function(delta) {
+        let newBeats = beatsPerMeasure + delta;
+        if (newBeats < 1) newBeats = 1;
+        if (newBeats > 16) newBeats = 16; // 上限設為 16 拍
+        
+        beatsPerMeasure = newBeats;
+        beatsInput.value = beatsPerMeasure;
+        
+        // 重設目前的拍子位置，避免陣列越界
+        currentBeat = 0;
+        
+        renderBeatIndicators();
+        
+        // 如果正在播放，需要重啟以更新 scheduler 邏輯
+        if (isPlaying) {
+            window.startStop();
+            window.startStop();
+        }
+    }
+
+    window.updateBPM = function(newBPM) {
+        const parsedBPM = parseInt(newBPM, 10);
+        if (isNaN(parsedBPM)) return;
+        bpm = Math.max(40, Math.min(240, parsedBPM));
+        bpmDisplay.textContent = bpm;
+        bpmInput.value = bpm;
+    }
+
+    window.changeBPM = function(delta) {
+        updateBPM(bpm + delta);
+    }
+
+    window.toggleSubdivision = function(beatIndex) {
+        initializeAudio();
+        let currentMode = beatSubdivisions[beatIndex];
+        let newMode = (currentMode + 1) % 5; 
+        beatSubdivisions[beatIndex] = newMode;
+        renderBeatIndicators(); // 重新渲染以更新狀態
+        
+        if (isPlaying) {
+            window.startStop(); 
+            window.startStop(); 
+        }
+    };
+
+    window.startStop = function() {
+        initializeAudio();
+        if (isPlaying) {
+            clearInterval(intervalTimer);
+            isPlaying = false;
+            hideVisualization(); 
+            clearTimeout(autoFullscreenTimeout);
+            
+            startButton.textContent = '開始';
+            startButton.classList.remove('bg-red-500', 'hover:bg-red-600', 'focus:ring-red-700');
+            startButton.classList.add('bg-green-500', 'hover:bg-green-600', 'focus:ring-green-700');
+            
+            // Reset Visuals
+            document.querySelectorAll('.beat-indicator').forEach((ind, i) => {
+                ind.classList.remove('bg-[#ff5733]', 'bg-[#ffc300]', 'opacity-100');
+                if (beatSubdivisions[i] === 4) {
+                    ind.classList.add('bg-gray-900', 'opacity-50');
+                } else {
+                    ind.classList.add('bg-gray-600');
+                }
+            });
+            currentBeat = 0;
+        } else {
+            if (audioContext.state === 'suspended') audioContext.resume();
+            isPlaying = true;
+            startButton.textContent = '停止';
+            startButton.classList.remove('bg-green-500', 'hover:bg-green-600', 'focus:ring-green-700');
+            startButton.classList.add('bg-red-500', 'hover:bg-red-600', 'focus:ring-red-700');
+            currentBeat = 0;
+            nextNoteTime = audioContext.currentTime;
+            intervalTimer = setInterval(scheduler, lookahead);
+            if (!isFullscreenDisabled) setTimeout(showVisualization, 1000);
+        }
+    }
+
+    window.toggleDrumMode = function() {
+        isDrumMode = !isDrumMode;
+        if (isDrumMode) {
+            drumIcon.classList.replace('text-gray-400', 'text-[#ffc300]'); 
+            drumModeToggle.classList.replace('bg-[#4a4768]', 'bg-[#6a5acd]');
+            drumModeToggle.title = '切換至節拍器模式 (D)';
+        } else {
+            drumIcon.classList.replace('text-[#ffc300]', 'text-gray-400');
+            drumModeToggle.classList.replace('bg-[#6a5acd]', 'bg-[#4a4768]');
+            drumModeToggle.title = '切換至鼓模式 (D)';
+        }
+        if (isPlaying) { window.startStop(); window.startStop(); }
+    }
+
+    window.handleTap = function() {
+        const now = Date.now();
+        if (tapHistory.length > 0 && now - tapHistory[tapHistory.length - 1] > TAP_RESET_THRESHOLD) {
+            tapHistory = [];
+            tapTempoInfo.textContent = "偵測開始...";
+        }
+        tapHistory.push(now);
+        if (tapHistory.length > 8) tapHistory.shift();
+        if (tapHistory.length >= 2) {
+            let totalInterval = 0;
+            for (let i = 1; i < tapHistory.length; i++) totalInterval += tapHistory[i] - tapHistory[i - 1];
+            const avg = totalInterval / (tapHistory.length - 1);
+            updateBPM(Math.round(60000 / avg));
+            tapTempoInfo.textContent = `偵測 BPM：${bpm}`;
+        } else {
+            tapTempoInfo.textContent = "請再次點擊...";
+        }
+    };
+
+    // ---------------------------------------------------------
+    // --- 歌單 (Presets) 管理邏輯 ---
+    // ---------------------------------------------------------
+    
+    const STORAGE_KEY = 'metronome_presets';
+
+    function getPresets() {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return stored ? JSON.parse(stored) : [];
+    }
+
+    function savePresets(presets) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
+        renderPresetList();
+    }
+
+    window.savePreset = function() {
+        const name = presetNameInput.value.trim();
+        if (!name) {
+            alert('請輸入歌曲名稱');
+            return;
+        }
+
+        const newPreset = {
+            id: Date.now(),
+            name: name,
+            bpm: bpm,
+            beats: beatsPerMeasure,
+            subdivisions: [...beatSubdivisions], // 複製陣列
+            isDrumMode: isDrumMode
+        };
+
+        const presets = getPresets();
+        presets.unshift(newPreset); // 加入到最上面
+        savePresets(presets);
+        
+        presetNameInput.value = ''; // 清空輸入
+        // 簡單的視覺回饋
+        const btn = document.querySelector('button[onclick="savePreset()"]');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span>已儲存!</span>';
+        setTimeout(() => btn.innerHTML = originalText, 1500);
+    }
+
+    window.loadPreset = function(id) {
+        const presets = getPresets();
+        const preset = presets.find(p => p.id === id);
+        if (!preset) return;
+
+        // 載入設定
+        updateBPM(preset.bpm);
+        beatsPerMeasure = preset.beats || 4; // 相容舊資料
+        beatsInput.value = beatsPerMeasure;
+        
+        if (preset.subdivisions) {
+            beatSubdivisions = [...preset.subdivisions];
+        } else {
+            beatSubdivisions = new Array(beatsPerMeasure).fill(0);
+        }
+        
+        // 處理 Drum Mode
+        if (preset.isDrumMode !== isDrumMode) {
+            toggleDrumMode();
+        }
+
+        renderBeatIndicators();
+        
+        // 如果正在播放，重啟以應用
+        if (isPlaying) {
+            window.startStop();
+            window.startStop();
+        }
+    }
+
+    window.deletePreset = function(id, event) {
+        event.stopPropagation(); // 防止觸發 loadPreset
+        if (!confirm('確定要刪除這個設定嗎？')) return;
+        
+        let presets = getPresets();
+        presets = presets.filter(p => p.id !== id);
+        savePresets(presets);
+    }
+
+    window.renderPresetList = function() {
+        const presets = getPresets();
+        presetListUl.innerHTML = '';
+
+        if (presets.length === 0) {
+            presetListUl.innerHTML = '<li class="text-gray-500 text-center text-sm py-4">尚無儲存的設定</li>';
+            return;
+        }
+
+        presets.forEach(preset => {
+            const li = document.createElement('li');
+            li.className = 'bg-[#2c2a4a] hover:bg-[#363459] rounded-lg p-3 flex justify-between items-center cursor-pointer group transition-colors';
+            li.onclick = () => loadPreset(preset.id);
+
+            // 鼓模式圖示
+            const drumBadge = preset.isDrumMode ? '🥁 ' : '';
+            
+            li.innerHTML = `
+                <div class="flex flex-col items-start">
+                    <span class="font-bold text-gray-200 group-hover:text-white transition-colors">${drumBadge}${preset.name}</span>
+                    <span class="text-xs text-gray-400 mt-1">
+                        <span class="text-[#9a7dff] font-mono font-bold text-sm">${preset.bpm} BPM</span> 
+                        <span class="mx-1 text-gray-600">|</span> 
+                        ${preset.beats} / 4
+                    </span>
+                </div>
+                <button onclick="deletePreset(${preset.id}, event)" 
+                        class="text-gray-500 hover:text-red-400 p-2 rounded-full hover:bg-red-400/10 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100" 
+                        title="刪除">
+                    ${SVG_TRASH}
+                </button>
+            `;
+            presetListUl.appendChild(li);
+        });
+    }
+
+    // ---------------------------------------------------------
+    // --- 視覺化與全螢幕 ---
+    // ---------------------------------------------------------
+
+    function showVisualization() {
+        if (!isPlaying || isFullscreenDisabled) return;
+        clearTimeout(autoFullscreenTimeout);
+        isVisualizationMode = true;
+        appContainer.classList.add('hidden');
+        visualizationScreen.classList.remove('hidden');
+        
+        // 初始化狀態
+        document.querySelectorAll('.beat-number-main').forEach(el => {
+            el.classList.remove('text-white', 'scale-105', 'text-red-400', 'text-[#9a7dff]');
+            el.classList.add('text-gray-700');
+        });
+        document.querySelectorAll('.beat-quadrant').forEach(el => el.classList.remove('bg-[#4a4768]'));
+    }
+
+    function hideVisualization() {
+        isVisualizationMode = false;
+        visualizationScreen.classList.add('hidden');
+        appContainer.classList.remove('hidden');
+        
+        if (isPlaying && !isFullscreenDisabled) {
+            clearTimeout(autoFullscreenTimeout);
+            autoFullscreenTimeout = setTimeout(showVisualization, AUTO_FULLSCREEN_DELAY); 
+        }
+    }
+
+    window.toggleFullscreenLock = function() {
+        isFullscreenDisabled = !isFullscreenDisabled;
+        if (isFullscreenDisabled) {
+            fullscreenIconContainer.innerHTML = SVG_EYE_CLOSED; 
+            fullscreenIconContainer.classList.replace('text-gray-400', 'text-[#9a7dff]');
+            fullscreenLockToggle.classList.replace('bg-[#4a4768]', 'bg-[#6a5acd]');
+            fullscreenLockToggle.title = '解鎖自動全螢幕 (F)';
+            clearTimeout(autoFullscreenTimeout); 
+            if (isVisualizationMode) hideVisualization();
+        } else {
+            fullscreenIconContainer.innerHTML = SVG_EYE_OPEN; 
+            fullscreenIconContainer.classList.replace('text-[#9a7dff]', 'text-gray-400');
+            fullscreenLockToggle.classList.replace('bg-[#6a5acd]', 'bg-[#4a4768]');
+            fullscreenLockToggle.title = '鎖定自動全螢幕 (F)';
+            if (isPlaying) hideVisualization(); 
+        }
+    }
+    
+    // Event Listeners
+    visualizationScreen.addEventListener('click', hideVisualization);
+    appContainer.addEventListener('mousemove', () => {
+        if (isPlaying && !isVisualizationMode && !isFullscreenDisabled) {
+            clearTimeout(autoFullscreenTimeout);
+            autoFullscreenTimeout = setTimeout(showVisualization, AUTO_FULLSCREEN_DELAY);
+        }
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.target.tagName === 'INPUT') return;
+        if (isVisualizationMode && !['Space', 'KeyD', 'KeyF'].includes(event.code)) {
+            event.preventDefault(); hideVisualization(); return;
+        }
+        if (event.code === 'Space') { event.preventDefault(); handleTap(); }
+        else if (event.code === 'KeyD') { event.preventDefault(); toggleDrumMode(); }
+        else if (event.code === 'KeyF') { event.preventDefault(); toggleFullscreenLock(); }
+    });
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', () => {
+        updateBPM(bpm);
+        renderBeatIndicators(); // 初始繪製 4 拍
+        renderPresetList(); // 載入歌單
+        
+        isFullscreenDisabled = false;
+        fullscreenIconContainer.innerHTML = SVG_EYE_OPEN; 
+    });
+
+</script>
+
+</body>
+</html>
