@@ -637,12 +637,41 @@
         const originalText = btn.innerHTML;
         btn.innerHTML = '<span>已儲存!</span>';
         setTimeout(() => btn.innerHTML = originalText, 1500);
+        
     }
 
-    window.loadPreset = function(id) {
+window.loadPreset = function(id) {
         const presets = getPresets();
         const preset = presets.find(p => p.id === id);
         if (!preset) return;
+
+        // 載入設定
+        updateBPM(preset.bpm);
+        beatsPerMeasure = preset.beats || 4; // 相容舊資料
+        beatsInput.value = beatsPerMeasure;
+        
+        if (preset.subdivisions) {
+            beatSubdivisions = [...preset.subdivisions];
+        } else {
+            beatSubdivisions = new Array(beatsPerMeasure).fill(0);
+        }
+        
+        // 處理 Drum Mode
+        if (preset.isDrumMode !== isDrumMode) {
+            toggleDrumMode();
+        }
+
+        renderBeatIndicators();
+        
+        // 如果正在播放，重啟以應用
+        if (isPlaying) {
+            window.startStop();
+            window.startStop();
+        }
+
+        // --- 新增的功能：平滑捲動回最上方 ---
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 
         // 載入設定
         updateBPM(preset.bpm);
